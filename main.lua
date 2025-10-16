@@ -4,10 +4,8 @@ require("src.engine.vars")
 require("src.engine.statevars")
 require("src.engine.vendcust")
 
-DiscordRPC = require("src.lib.discordrpc")
 
 ---@diagnostic disable-next-line: lowercase-global
-https = require("src.lib.https")
 
 ---@diagnostic disable-next-line: lowercase-global
 utf8 = require("utf8")
@@ -23,17 +21,8 @@ require("src.lib.stable_sort")
 Class = require("src.utils.class")
 require("src.utils.graphics")
 
-ColorUtils = require("src.utils.colorutils")
-MathUtils = require("src.utils.mathutils")
-StringUtils = require("src.utils.stringutils")
-TableUtils = require("src.utils.tableutils")
-ClassUtils = require("src.utils.classutils")
-TiledUtils = require("src.utils.tiledutils")
-FileSystemUtils = require("src.utils.filesystemutils")
-HookSystem = require("src.utils.hooksystem")
-Utils = require("src.utils.utils")
-
 GitFinder = require("src.utils.gitfinder")
+Utils = require("src.utils.utils")
 CollisionUtil = require("src.utils.collision")
 Draw = require("src.utils.draw")
 
@@ -41,8 +30,8 @@ Kristal = require("src.kristal")
 -- Ease of access for game variables
 Game = Kristal.States["Game"]
 MainMenu = Kristal.States["MainMenu"]
-LoadingState = Kristal.States["Loading"]
 
+LoaderProcedure = require("src.engine.loadthread")
 Assets = require("src.engine.assets")
 Music = require("src.engine.music")
 Input = require("src.engine.input")
@@ -70,25 +59,6 @@ Callback = require("src.engine.objects.callback")
 Video = require("src.engine.objects.video")
 GonerChoice = require("src.engine.objects.gonerchoice")
 GonerKeyboard = require("src.engine.objects.gonerkeyboard")
-
-MainMenuTitle = require("src.engine.menu.mainmenutitle")
-MainMenuOptions = require("src.engine.menu.mainmenuoptions")
-MainMenuCredits = require("src.engine.menu.mainmenucredits")
-MainMenuModList = require("src.engine.menu.mainmenumodlist")
-MainMenuModCreate = require("src.engine.menu.mainmenumodcreate")
-MainMenuModConfig = require("src.engine.menu.mainmenumodconfig")
-MainMenuModError = require("src.engine.menu.mainmenumoderror")
-MainMenuFileSelect = require("src.engine.menu.mainmenufileselect")
-MainMenuFileName = require("src.engine.menu.mainmenufilename")
-MainMenuDefaultName = require("src.engine.menu.mainmenudefaultname")
-MainMenuControls = require("src.engine.menu.mainmenucontrols")
-MainMenuDeadzone = require("src.engine.menu.mainmenudeadzone")
-
-ModList = require("src.engine.menu.objects.modlist")
-ModButton = require("src.engine.menu.objects.modbutton")
-ModCreateButton = require("src.engine.menu.objects.modcreatebutton")
-FileButton = require("src.engine.menu.objects.filebutton")
-FileNamer = require("src.engine.menu.objects.filenamer")
 
 DarkTransitionLine = require("src.engine.game.darktransition.darktransitionline")
 DarkTransitionParticle = require("src.engine.game.darktransition.darktransitionparticle")
@@ -230,7 +200,6 @@ ActionButton = require("src.engine.game.battle.ui.actionbutton")
 AttackBox = require("src.engine.game.battle.ui.attackbox")
 AttackBar = require("src.engine.game.battle.ui.attackbar")
 TensionBar = require("src.engine.game.battle.ui.tensionbar")
-TensionBarGlow = require("src.engine.game.battle.ui.tensionbarglow")
 SpeechBubble = require("src.engine.game.battle.ui.speechbubble")
 
 FlashFade = require("src.engine.game.effects.flashfade")
@@ -416,15 +385,13 @@ function love.run()
                 end
             end
         else
-            local err_msg_expose
             local success, result = xpcall(mainLoop, 
                 function(err_msg) 
                     --has a chance of failing due to a stack overflow. try and catch that, but this *also* might cause a stack overflow
-                    local ok, msg = pcall(Kristal.errorHandler, err_msg, 4)
+                    local ok, msg = pcall(Kristal.errorHandler, err_msg)
                     if(ok) then
                         return msg
                     else -- err_msg *might* contain a stack overflow error, pass it on if the kristal error handler fails
-                        err_msg_expose = err_msg
                         return debug.traceback() --somehow, this affects the above if statement? im so confused but it works...doesnt send err_msg through
                     end
                 end
@@ -437,7 +404,7 @@ function love.run()
                 --this should only happen when there's an internal error with the errorhandler or the callstack overflows
                 --the LUA_ERRERR state is set internally by the lua engine for both of these cases 
                 --see https://www.lua.org/source/5.4/ldo.c.html
-                error_result = Kristal.errorHandler({ critical = result, msg = err_msg_expose })
+                error_result = Kristal.errorHandler({ critical = result })
             end
         end
     end

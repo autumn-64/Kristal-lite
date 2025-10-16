@@ -7,10 +7,9 @@ local BattleCutscene, super = Class(Cutscene)
 
 local function _true() return true end
 
----@overload fun(func: BattleCutsceneFunc, ...)
----@param group string
+---@param group fun(cutscene: Cutscene, ...)
 ---@param id? string
----@param ... any
+---@param ... unknown
 function BattleCutscene:init(group, id, ...)
     local scene, args = self:parseFromGetter(Registry.getBattleCutscene, group, id, ...)
 
@@ -411,25 +410,25 @@ end
 ---@return table?   bubbles         A table of all bubbles created by this function call.
 function BattleCutscene:battlerText(battlers, text, options)
     options = options or {}
-    local _battlers = {} ---@type Battler[]
     if type(battlers) == "string" then
-        local id = battlers ---@type string
+        local id = battlers
+        battlers = {}
         for _,battler in ipairs(Game.battle.enemies) do
             if battler.id == id then
-                table.insert(_battlers, battler)
+                table.insert(battlers, battler)
             end
         end
         for _,battler in ipairs(Game.battle.party) do
             if battler.chara.id == id then
-                table.insert(_battlers, battler)
+                table.insert(battlers, battler)
             end
         end
     elseif isClass(battlers) then
-        _battlers = {battlers}
+        battlers = {battlers}
     end
     local wait = options["wait"] or options["wait"] == nil
     local bubbles = {}
-    for _,battler in ipairs(_battlers) do
+    for _,battler in ipairs(battlers) do
         local bubble
         if not options["x"] and not options["y"] then
             bubble = battler:spawnSpeechBubble(text, options)

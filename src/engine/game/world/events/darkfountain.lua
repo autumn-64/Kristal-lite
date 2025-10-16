@@ -23,21 +23,19 @@
 ---@field bg_color          [number, number, number]    Second color in the fountain, also used by [`FountainFloor`](lua://FountainFloor.init) if present
 ---
 ---@overload fun(...) : DarkFountain
-local DarkFountain, super = Class(Event, "darkfountain")
+local DarkFountain, super = Class(Event)
 
-function DarkFountain:init(x, y, properties)
+function DarkFountain:init(x, y)
     super.init(self, x, y)
-
-    self.properties = properties or {}
 
     self:setOrigin(0.5, 1)
 
-    self.width = (self.properties["narrow"] and 80 or 120) * 2
+    self.width = 120 * 2
     self.height = 280 * 2
 
     self.bg_texture = Assets.getTexture("world/events/darkfountain/bg")
-    self.edge_texture = Assets.getTexture("world/events/darkfountain/edge" .. (self.properties["narrow"] and "_narrow" or ""))
-    self.bottom_texture = Assets.getTexture("world/events/darkfountain/bottom" .. (self.properties["narrow"] and "_narrow" or ""))
+    self.edge_texture = Assets.getTexture("world/events/darkfountain/edge")
+    self.bottom_texture = Assets.getTexture("world/events/darkfountain/bottom")
 
     -- Use the DarkFountain:drawMask() function to mask the fountain
     self.mask_fx = self:addFX(MaskFX(self))
@@ -114,12 +112,11 @@ function DarkFountain:draw()
     Draw.drawWrapped(self.edge_texture, false, true, 20 + math.sin(self.siner / 16) * 12, self.height - (self.bg_siner * 280) / 7, 0, 2, 2)
     Draw.drawWrapped(self.edge_texture, false, true, 20 - math.sin(self.siner / 16) * 12, self.height - (self.bg_siner * 280) / 7, 0, 2, 2)
     Draw.setColor(color, 0.3)
-    local narrow_offset = self.properties["narrow"] and 140 or 0
-    Draw.draw(self.bottom_texture, 0, self.height - 280 - 8 + (math.sin(self.siner / 16) * 8) + narrow_offset, 0, 2, 2)
+    Draw.draw(self.bottom_texture, 0, self.height - 280 - 8 + (math.sin(self.siner / 16) * 8), 0, 2, 2)
     Draw.setColor(color, 0.5)
-    Draw.draw(self.bottom_texture, 0, self.height - 280 - 4 + (math.sin(self.siner / 16) * 4) + narrow_offset, 0, 2, 2)
+    Draw.draw(self.bottom_texture, 0, self.height - 280 - 4 + (math.sin(self.siner / 16) * 4), 0, 2, 2)
     Draw.setColor(color, 1)
-    Draw.draw(self.bottom_texture, 0, self.height - 280 + narrow_offset, 0, 2, 2)
+    Draw.draw(self.bottom_texture, 0, self.height - 280, 0, 2, 2)
 
     super.draw(self)
 end

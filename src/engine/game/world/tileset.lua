@@ -44,7 +44,7 @@ function Tileset:init(data, path, base_dir)
             end
         end
         if tile.image then
-            local image_path = FileSystemUtils.absoluteToLocalPath("assets/sprites/", tile.image, self.base_dir)
+            local image_path = Utils.absoluteToLocalPath("assets/sprites/", tile.image, self.base_dir)
             info.path = image_path
             info.texture = Assets.getTexture(image_path)
             if not info.texture then
@@ -63,10 +63,25 @@ function Tileset:init(data, path, base_dir)
         self.id_count = math.max(self.id_count, tile.id + 1)
     end
 
+
+    -- local function key_getter(tbl)
+    --     local result = {}
+    --     for k in pairs(tbl) do
+    --         table.insert(result, k)
+    --     end
+    --     return result
+    -- end
+
+
+
     if data.image then
-        local image_path = FileSystemUtils.absoluteToLocalPath("assets/sprites/", data.image, self.base_dir)
+        local image_path = Utils.absoluteToLocalPath("assets/sprites/", data.image, self.base_dir)
         self.texture = Assets.getTexture(image_path)
         if not self.texture then
+            -- print(key_getter(Assets.data.texture))
+            -- for iv, k in pairs(Assets.data.texture) do
+            --     print("This key is", iv, k)
+            -- end
             error("Could not load tileset texture: " .. tostring(image_path) .. " [" .. tostring(path) .. "]")
         end
     end

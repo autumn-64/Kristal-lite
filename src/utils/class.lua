@@ -38,7 +38,12 @@ return function(include, id)
                 for _,c in ipairs(include) do
                     if c[k] then
                         if a == t then
-                            error("\"super:" .. k .. "(self)\" used, expected \"super." .. k .. "(self)\"", 2)
+                            local info = debug.getinfo(2, "Sln")
+                            -- We can safely assume that by the time anything using
+                            -- super: gets made, Kristal.Console will already exist.
+                            Kristal.Console:warn("Deprecated \"super:"..k.."(self)\" used, expected \"super."..k.."(self)\" ")
+                            Kristal.Console:warn(info.source .. ":"..info.currentline)
+                            return c[k](...)
                         else
                             return c[k](a, ...)
                         end

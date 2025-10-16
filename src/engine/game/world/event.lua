@@ -13,7 +13,6 @@
 ---@field sprite            Sprite?
 ---@field unique_id         string
 ---@field world             World       The world that this event is contained in
----@field data              table
 ---
 ---@overload fun(x: number, y: number, shape: table) : Event
 ---@overload fun(data: table) : Event
@@ -113,7 +112,7 @@ function Event:onLoad() end
 function Event:postLoad() end
 
 --- Called when the event is added as the child of another object
----@param parent World|Event
+---@param parent Object
 function Event:onAdd(parent)
     if parent:includes(World) then
         self.world = parent
@@ -123,7 +122,7 @@ function Event:onAdd(parent)
 end
 
 --- Called when the event is removed
----@param parent World|Event
+---@param parent Object
 function Event:onRemove(parent)
     if self.data then
         if self.world.map.events_by_name[self.data.name] then
@@ -177,7 +176,7 @@ end
 --- This variant of `Game:addFlag()` interacts with flags specific to this event's unique id
 ---@param flag      string  The name of the flag to add to
 ---@param amt?      number  (Defaults to `1`)
----@return number? new_value
+---@return number new_value
 function Event:addFlag(flag, amt)
     local uid = self:getUniqueID()
     if uid then

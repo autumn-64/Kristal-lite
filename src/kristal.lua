@@ -1,6 +1,4 @@
 ---@class Kristal
----@field Console Console
----@field DebugSystem DebugSystem
 local Kristal = {}
 
 if HOTSWAPPING then
@@ -12,7 +10,6 @@ else
     Kristal.Shaders = require("src.engine.shaders")
     Kristal.States = {
         ["Loading"] = require("src.engine.loadstate"),
-        ["MainMenu"] = require("src.engine.menu.mainmenu"),
         ["Game"] = require("src.engine.game.game"),
         ["Testing"] = require("src.teststate"),
         ["Empty"] = {}
@@ -33,6 +30,7 @@ else
 
         message = ""
     }
+    Kristal.loader_message = ""
 
     Kristal.HTTPS = {
         in_channel = nil,
@@ -165,11 +163,11 @@ function love.load(args)
     TAKING_SCREENSHOT = false
 
     -- start load thread
-    Kristal.Loader.in_channel = love.thread.getChannel("load_in")
-    Kristal.Loader.out_channel = love.thread.getChannel("load_out")
+    -- Kristal.Loader.in_channel = love.thread.getChannel("load_in")
+    -- Kristal.Loader.out_channel = love.thread.getChannel("load_out")
 
-    Kristal.Loader.thread = love.thread.newThread("src/engine/loadthread.lua")
-    Kristal.Loader.thread:start()
+    -- Kristal.Loader.thread = love.thread.newThread("src/engine/loadthread.lua")
+    -- Kristal.Loader.thread:start()
 
     -- start https thread
     Kristal.HTTPS.in_channel = love.thread.getChannel("https_in")
@@ -210,7 +208,7 @@ function love.quit()
     end
 
     Kristal.saveConfig()
-    if Kristal.Loader.thread and Kristal.Loader.thread:isRunning() then
+    if Kristal.Loader ~= nil and Kristal.Loader.thread and Kristal.Loader.thread:isRunning() then
         Kristal.Loader.in_channel:push("stop")
     end
     if Kristal.HTTPS.thread and Kristal.HTTPS.thread:isRunning() then
@@ -329,6 +327,16 @@ function Kristal.drawBorders()
     end
 end
 
+--- @class LoadingCoroutine
+--- @field co thread
+--- @field after function|nil
+--- @field hash string
+--- @field ignore_result boolean
+
+--- @type LoadingCoroutine[]
+local loading_coroutines = {}
+
+
 function love.update(dt)
     if PERFORMANCE_TEST_STAGE == "UPDATE" then
         PERFORMANCE_TEST = {}
@@ -382,32 +390,85 @@ function love.update(dt)
 
     SCREENSHOT_DISPLAY = Utils.approach(SCREENSHOT_DISPLAY, 1, 4 * dt)
 
-    if Kristal.Loader.waiting > 0 then
-        while Kristal.Loader.out_channel:getCount() > 0 do
-            local msg = Kristal.Loader.out_channel:pop()
-            if msg then
-                if msg.status == "finished" then
-                    Kristal.Loader.waiting = Kristal.Loader.waiting - 1
+    local function handle_message(msg, run_afterwards)
+        if msg then
+            if msg.status == "finished" then
+                -- Kristal.Loader.waiting = Kristal.Loader.waiting - 1
+                -- Kristal.Loader.message = ""
+                Kristal.loader_message = ""
 
-                    Kristal.Loader.message = ""
+                -- TODO: only call this once
+                -- all the loading is done
+                -- if Kristal.Loader.waiting == 0 then
+                --     Kristal.Overlay.setLoading(false)
+                -- end
+                
+                -- print("With this many textures:", #msg.data.assets.texture)
+                -- for iv, k in pairs(msg.data.assets.texture) do
+                --     print("This key is", iv, k)
+                -- end
+                -- print("==== and that's it")
 
-                    if Kristal.Loader.waiting == 0 then
-                        Kristal.Overlay.setLoading(false)
-                    end
+                Assets.loadData(msg.data.assets)
+                Kristal.Mods.loadData(msg.data.mods, msg.data.failed_mods)
+                -- print("Finished and assets have been loaded so I'll run - but before let me check my assets",
+                --         run_afterwards)
+                -- print("With this many textures", #Assets.data.texture)
+                -- print(key_getter(Assets.data.texture))
 
-                    Assets.loadData(msg.data.assets)
-                    Kristal.Mods.loadData(msg.data.mods, msg.data.failed_mods)
 
-                    if Kristal.Loader.end_funcs[msg.key] then
-                        Kristal.Loader.end_funcs[msg.key]()
-                        Kristal.Loader.end_funcs[msg.key] = nil
-                    end
-                elseif msg.status == "loading" then
-                    Kristal.Loader.message = msg.path
+
+                if run_afterwards ~= nil then
+                    run_afterwards()
+                end
+
+                -- if Kristal.Loader.end_funcs[msg.key] then
+                --     Kristal.Loader.end_funcs[msg.key]()
+                --     Kristal.Loader.end_funcs[msg.key] = nil
+                -- end
+            elseif msg.status == "loading" then
+                Kristal.loader_message = msg.path
+            end
+        end
+
+    end
+
+    -- look for coroutines that have yielded, clear those that
+    -- have exited, you know the drill
+    -- local overlay_is_loading = Kristal.Overlay.loading
+    for i = #loading_coroutines, 1, -1 do
+        local loading_co = loading_coroutines[i]
+        local co = loading_co.co
+        if coroutine.status(co) == "dead" then
+            table.remove(loading_coroutines, i)
+        else
+            local ok, msg = coroutine.resume(co)
+
+            local run_afterwards_procedure = nil
+            if loading_co.after ~= nil then
+                run_afterwards_procedure = loading_co.after
+            end
+            if not ok then
+                print("Coroutine error:", msg)
+                table.remove(loading_coroutines, i)
+            else
+                if not loading_co.ignore_result then
+                    handle_message(msg, run_afterwards_procedure)
                 end
             end
         end
+        if #loading_coroutines == 0 then
+            Kristal.Overlay.setLoading(false)
+        end
     end
+
+    -- TODO: get rid of this (this will never run)
+    -- if Kristal.Loader and Kristal.Loader.waiting > 0 then
+    --     while Kristal.Loader.out_channel:getCount() > 0 do
+    --         local msg = Kristal.Loader.out_channel:pop()
+    --         handle_message(msg)
+    --     end
+    -- end
 
     if Kristal.HTTPS.waiting > 0 then
         local msg = Kristal.HTTPS.out_channel:pop()
@@ -538,14 +599,6 @@ function Kristal.onKeyPressed(key, is_repeat)
         elseif key == "f8" then
             print("Hotswapping files...\nNOTE: Might be unstable. If anything goes wrong, it's not our fault :P")
             Hotswapper.scan()
-        elseif key == "f9" and Input.shift() then
-            love.filesystem.createDirectory("screenshots")
-            -- FIXME: the game might freeze when using love.system.openURL to open a file directory
-            if (love.system.getOS() == "Windows") then
-                os.execute('start /B \"\" \"' .. love.filesystem.getSaveDirectory() .. '/screenshots\"')
-            else
-                love.system.openURL("file://" .. love.filesystem.getSaveDirectory() .. "/screenshots")
-            end
         elseif key == "f9" then
             love.filesystem.createDirectory("screenshots")
             love.graphics.captureScreenshot("screenshots/" .. os.time() .. "-" .. RUNTIME .. ".png")
@@ -553,13 +606,17 @@ function Kristal.onKeyPressed(key, is_repeat)
             Assets.playSound("camera_flash")
             SCREENSHOT_DISPLAY = 0
             TAKING_SCREENSHOT = true
-        elseif key == "r" and Input.ctrl() and (not console_open) then
-            -- CTRL+R to reload
-            if (not Kristal.isLoading()) and (Kristal.getState() ~= LoadingState) then
-                if Kristal.getModOption("hardReset") or Input.alt() and Input.shift() then
-                    love.event.quit("restart")
-                else
-                    if Mod then
+        elseif key == "r" and Input.ctrl() and not console_open then
+            if Kristal.getModOption("hardReset") or Input.alt() and Input.shift() then
+                love.event.quit("restart")
+            else
+                if Mod then
+                    local cur_state = Kristal.getState()
+                    -- print("The game state is", cur_state)
+                    if cur_state.loading == true or next(cur_state) == nil then
+                        -- print("Spamming the reload button?")
+                        
+                    else                    
                         if Input.alt() then
                             Kristal.quickReload("none")
                         elseif Input.shift() then
@@ -567,9 +624,9 @@ function Kristal.onKeyPressed(key, is_repeat)
                         else
                             Kristal.quickReload("temp")
                         end
-                    else
-                        Kristal.returnToMenu()
                     end
+                else
+                    Kristal.returnToMenu()
                 end
             end
         end
@@ -611,9 +668,8 @@ end
 --- Kristal alternative to the default love.errorhandler. \
 --- Called when an error occurs.
 ---@param  msg string|table     The error message.
----@param trace_level integer?
 ---@return function|nil handler The error handler, called every frame instead of the main loop.
-function Kristal.errorHandler(msg, trace_level)
+function Kristal.errorHandler(msg)
     Draw.reset()
 
     local copy_color = { 1, 1, 1, 1 }
@@ -643,16 +699,11 @@ function Kristal.errorHandler(msg, trace_level)
     local trace = nil
     if type(msg) == "table" then
         if msg.critical then
-            if msg.critical == "error in error handling" then
+            if(msg.critical == "error in error handling") then
                 critical = true
-                msg = "critical error"
+                msg =  "critical error"
             else
-                if msg.msg then
-                    trace = msg.critical
-                    msg = tostring(msg.msg)
-                else
-                    msg = msg.critical
-                end
+                msg = msg.critical
             end
         elseif msg.msg then
             local split = Utils.split(msg.msg, "\n")
@@ -663,10 +714,8 @@ function Kristal.errorHandler(msg, trace_level)
 
     msg = tostring(msg or "nil")
 
-    if trace_level == nil then trace_level = 2 end
-
     if not critical and not trace then
-        error_printer(msg, trace_level)
+        error_printer(msg, 2)
     elseif trace then
         print("Error: " .. msg .. "\n" .. trace)
     end
@@ -723,7 +772,7 @@ function Kristal.errorHandler(msg, trace_level)
     if not trace then
         trace = ""
         if not critical then
-            trace = debug.traceback("", trace_level)
+            trace = debug.traceback("", 2)
         end
         if COROUTINE_TRACEBACK then
             trace = COROUTINE_TRACEBACK .. "\n" .. trace
@@ -957,12 +1006,6 @@ function Kristal.errorHandler(msg, trace_level)
     end
 end
 
---- Returns whether Kristal is currently loading something.
----@return boolean loading Whether Kristal is loading something or not.
-function Kristal.isLoading()
-    return Kristal.Loader.waiting > 0
-end
-
 --- Switches the Gamestate to the given one.
 ---@param state table|string The gamestate to switch to.
 ---| "Loading" # The loading state, before entering the main menu.
@@ -1169,13 +1212,12 @@ function Kristal.returnToMenu()
     end
 
     -- Reload mods and return to memu
-    Kristal.loadAssets("", "mods", "", function()
+    Kristal.loadAssets("", "mods", "", function ()
         Kristal.setDesiredWindowTitleAndIcon()
         Kristal.setState(MainMenu)
     end)
 
     Kristal.DebugSystem:refresh()
-
     -- End input if it's open
     if not Kristal.Console.is_open then
         TextInput.endInput()
@@ -1188,10 +1230,6 @@ end
 ---| "save" # Reloads the mod from the last save.
 ---| "none" # Fully reloads the mod from the start of the game.
 function Kristal.quickReload(mode)
-    if Kristal.isLoading() then
-        error("Attempt to reload while loading")
-    end
-
     -- Temporarily save game variables
     local save, save_id, encounter, shop
     if mode == "temp" then
@@ -1208,37 +1246,43 @@ function Kristal.quickReload(mode)
 
     -- Go to empty state
     Kristal.setState("Empty")
-
+    print("I am in the empty state")
     -- Clear the mod
     Kristal.clearModState()
     -- Reload mods
-    Kristal.loadAssets("", "mods", "", function ()
-        Kristal.setDesiredWindowTitleAndIcon()
-        -- Reload the current mod directly
-        if mode ~= "save" then
-            Kristal.loadMod(mod_id, nil, nil, function ()
-                -- Pre-initialize the current mod
-                if Kristal.preInitMod(mod_id) then
-                    Kristal.setDesiredWindowTitleAndIcon()
-                    if save then
-                        -- Switch to Game and load the temp save
-                        Kristal.setState(Game, save, save_id, false)
-                        -- If we had an encounter, restart the encounter
-                        if encounter then
-                            Game:encounter(encounter, false)
-                        elseif shop then -- If we were in a shop, re-enter it
-                            Game:enterShop(shop)
+
+    local success, result = pcall(function() 
+        Kristal.loadAssets("", "mods", "", function ()
+            Kristal.setDesiredWindowTitleAndIcon()
+            -- Reload the current mod directly
+            if mode ~= "save" then
+                Kristal.loadMod(mod_id, nil, nil, function ()
+                    -- Pre-initialize the current mod
+                    if Kristal.preInitMod(mod_id) then
+                        Kristal.setDesiredWindowTitleAndIcon()
+                        if save then
+                            -- Switch to Game and load the temp save
+                            Kristal.setState(Game, save, save_id, false)
+                            -- If we had an encounter, restart the encounter
+                            if encounter then
+                                Game:encounter(encounter, false)
+                            elseif shop then -- If we were in a shop, re-enter it
+                                Game:enterShop(shop)
+                            end
+                        else
+                            -- Switch to Game
+                            Kristal.setState(Game)
                         end
-                    else
-                        -- Switch to Game
-                        Kristal.setState(Game)
                     end
-                end
-            end)
-        else
-            Kristal.loadMod(mod_id, save_id)
-        end
+                end)
+            else
+                Kristal.loadMod(mod_id, save_id)
+            end
+        end)
     end)
+    print("Asset loading result is", success, result)
+
+    print("I requested the assets be loaded")
 end
 
 --- Clears all currently loaded assets. Called internally in the Loading state.
@@ -1250,31 +1294,95 @@ function Kristal.clearAssets(include_mods)
     end
 end
 
+
+local coroutines_spawned = 0
 --- Loads assets of the specified type from the given directory, and calls the given callback when done.
 ---@param dir    string       The directory to load assets from.
 ---@param loader string       The type of assets to load.
 ---@param paths? string|table The specific asset paths to load.
 ---@param after? function     The function to call when done.
 function Kristal.loadAssets(dir, loader, paths, after)
-    Kristal.Loader.message = ""
+    -- Kristal.Loader.message = ""
+    Kristal.loader_message = ""
     Kristal.Overlay.setLoading(true)
-    Kristal.Loader.waiting = Kristal.Loader.waiting + 1
-
+    -- Kristal.Loader.waiting = Kristal.Loader.waiting + 1
+    local after_procedure = nil
+    -- TODO: after should be part of the coroutine 
     if after then
-        Kristal.Loader.end_funcs[Kristal.Loader.next_key] = after
+        -- Kristal.Loader.end_funcs[Kristal.Loader.next_key] = after
+        after_procedure = after
     end
-
+    local verbose_loading = false
     if Kristal.Config["verboseLoader"] then
-        Kristal.Loader.in_channel:push("verbose")
+        verbose_loading = true
+        -- Kristal.Loader.in_channel:push("verbose")
     end
 
-    Kristal.Loader.in_channel:push({
-        key = Kristal.Loader.next_key,
+    local always_unimportant_key = 42069
+    local loading_inner_payload = {
+        key = always_unimportant_key,
         dir = dir,
         loader = loader,
         paths = paths
-    })
-    Kristal.Loader.next_key = Kristal.Loader.next_key + 1
+    }
+    -- print(debug.traceback())
+
+    -- print("Loading assets from", dir, loader, paths)
+
+    -- Prevent multiple assets from the same place from
+    -- being loaded at the same time. This doesn't do anything
+    -- so I'll leave it out
+    local function force_tostring(val)
+        if val == nil then
+            return ""
+        else
+            return tostring(val)
+        end
+    end
+    local asset_hash = (force_tostring(dir) + force_tostring(loader) + force_tostring(paths))
+    -- clear out and kill all running coroutines with the same
+    -- asset hash
+    local routine_length = #loading_coroutines
+    for j = routine_length, 1, -1 do
+        local target_routine = loading_coroutines[j]
+        if target_routine.hash == asset_hash then
+            -- print("Ignoring result of existing", asset_hash)
+            target_routine.ignore_result = true
+            -- target_routine.co
+            -- table.remove(loading_coroutines, j)
+        end
+    end
+
+
+    -- print("Loading with asset hash", asset_hash)
+    local tco = coroutine.create(function() 
+        local yielder_fn = function(data) 
+            coroutine.yield(data)
+        end
+        lp_load_all_assets(
+            loading_inner_payload,
+            verbose_loading,
+            yielder_fn
+        )
+    end)
+
+    --- @type LoadingCoroutine
+    local table_entry = { co = tco,
+        after = after_procedure,
+        hash = asset_hash,
+        id = coroutines_spawned,
+        ignore_result = false
+    }
+    coroutines_spawned = coroutines_spawned + 1
+    -- tco.procedure_afterwards = after_procedure
+    table.insert(loading_coroutines, table_entry)
+    -- Kristal.Loader.in_channel:push({
+    --     key = Kristal.Loader.next_key,
+    --     dir = dir,
+    --     loader = loader,
+    --     paths = paths
+    -- })
+    -- Kristal.Loader.next_key = Kristal.Loader.next_key + 1
 end
 
 --- Initializes the specified mod and loads its assets. \
@@ -1341,7 +1449,6 @@ function Kristal.loadMod(id, save_id, save_name, after)
         -- Add the current library to the libs table (again, with the real final value)
         Mod.libs[lib_id] = lib
     end
-
     Kristal.loadModAssets(mod.id, "all", "", after or function ()
         if Kristal.preInitMod(mod.id) then
             Kristal.setDesiredWindowTitleAndIcon()
@@ -1377,15 +1484,19 @@ function Kristal.loadModAssets(id, asset_type, asset_paths, after)
         if load_count == 0 then
             -- Finish mod loading
             MOD_LOADING = false
-
+            -- print("The after function is to be called")
             -- Call the after function
             after()
         end
     end
 
     -- Finally load all assets (libraries first)
+    --
     for _, lib_id in ipairs(mod.lib_order) do
-        Kristal.loadAssets(mod.libs[lib_id].path, asset_type or "all", asset_paths or "", finishLoadStep)
+        Kristal.loadAssets(mod.libs[lib_id].path,
+        asset_type or "all",
+        asset_paths or "", 
+        finishLoadStep)
     end
     Kristal.loadAssets(mod.path, asset_type or "all", asset_paths or "", finishLoadStep)
 end
@@ -1418,8 +1529,6 @@ end
 --- to either what mod requests to be or the defaults.
 function Kristal.setDesiredWindowTitleAndIcon()
     local mod = shouldWindowUseModBranding()
-    love.window.setIcon(mod and mod.window_icon_data or Kristal.icon)
-    love.window.setTitle(mod and mod.name or Kristal.game_default_name)
 end
 
 --- Called internally. Calls the `preInit` event on the mod and initializes the registry.
@@ -1673,7 +1782,7 @@ end
 
 --- Saves the current config table to the `settings.json`.
 function Kristal.saveConfig()
-    love.filesystem.write("settings.json", JSON.encode(Kristal.Config))
+   -- love.filesystem.write("settings.json", JSON.encode(Kristal.Config))
 end
 
 --- Saves the game.
@@ -1684,8 +1793,8 @@ function Kristal.saveGame(id, data)
     data = data or Game:save()
     Game.save_id = id
     Game.quick_save = nil
-    love.filesystem.createDirectory("saves/" .. Mod.info.id)
-    love.filesystem.write("saves/" .. Mod.info.id .. "/file_" .. id .. ".json", JSON.encode(data))
+    -- love.filesystem.createDirectory("saves/" .. Mod.info.id)
+    -- love.filesystem.write("saves/" .. Mod.info.id .. "/file_" .. id .. ".json", JSON.encode(data))
 end
 
 --- Loads the game from a save file.
@@ -1739,7 +1848,7 @@ end
 ---@param path? string The save folder to save to. (Defaults to the current mod's save folder)
 function Kristal.saveData(file, data, path)
     love.filesystem.createDirectory("saves/" .. (path or Mod.info.id))
-    love.filesystem.write("saves/" .. (path or Mod.info.id) .. "/" .. file .. ".json", JSON.encode(data or {}))
+   -- love.filesystem.write("saves/" .. (path or Mod.info.id) .. "/" .. file .. ".json", JSON.encode(data or {}))
 end
 
 --- Loads and returns the data from a file in the save folder.
@@ -1934,10 +2043,10 @@ end
 --- Clears all mod-defined hooks from `Utils.hook`, and restores the original functions. \
 --- Called internally when a mod is unloaded.
 function Kristal.clearModHooks()
-    for _, hook in ipairs(HookSystem.__MOD_HOOKS) do
+    for _, hook in ipairs(Utils.__MOD_HOOKS) do
         hook.target[hook.name] = hook.orig
     end
-    HookSystem.__MOD_HOOKS = {}
+    Utils.__MOD_HOOKS = {}
 end
 
 --- Removes all mod-defined classes from base classes' `__includers` table.
@@ -1946,7 +2055,7 @@ function Kristal.clearModSubclasses()
     for class, subs in pairs(MOD_SUBCLASSES) do
         for _, sub in ipairs(subs) do
             if class.__includers then
-                TableUtils.removeValue(class.__includers, sub)
+                Utils.removeFromTable(class.__includers, sub)
             end
         end
     end

@@ -4,10 +4,10 @@
 ---@see LegendCutscene  # For functions specific to legend cutscene scripts.
 ---
 ---@class Cutscene : Class
----@overload fun(func: CutsceneFunc, ...) : Cutscene
+---@overload fun(func: fun(cutscene: Cutscene, ...), ...) : Cutscene
 local Cutscene, super = Class()
 
----@param func CutsceneFunc
+---@param func fun(cutscene: Cutscene, ...)
 ---@param ... unknown
 function Cutscene:init(func, ...)
     self.wait_timer = 0
@@ -226,14 +226,15 @@ end
 
 --- Starts executing a new cutscene script specified by `func`.
 ---@param func function|string  The new cutscene script.
----@param ... any           Additional arguments to pass to the new cutscene.
----@return any
+---@param ... unknown           Additional arguments to pass to the new cutscene.
+---@return unknown
 function Cutscene:gotoCutscene(func, ...)
     if self.getter then
         local new_func, args = self:parseFromGetter(self.getter, func, ...)
         return new_func(self, unpack(args))
+    else
+        return func(self, ...)
     end
-    return func(self, ...)
 end
 
 --- Plays a sound.

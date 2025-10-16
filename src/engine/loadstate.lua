@@ -5,18 +5,12 @@ function Loading:init()
     self.logo_heart = love.graphics.newImage("assets/sprites/kristal/title_logo_heart.png")
 end
 
----@enum Loading.States
-Loading.States = {
-    WAITING = 0,
-    LOADING = 1,
-    DONE = 2,
-}
-
 function Loading:enter(from, dir)
     Mod = nil
     MOD_PATH = nil
 
-    self.loading_state = Loading.States.WAITING
+    self.loading = false
+    self.load_complete = false
 
     self.animation_done = false
 
@@ -24,9 +18,7 @@ function Loading:enter(from, dir)
     self.h = self.logo:getHeight()
 
     if not Kristal.Config["skipIntro"] then
-        self.noise = love.audio.newSource("assets/sounds/kristal_intro.ogg", "static")
-        self.end_noise = love.audio.newSource("assets/sounds/kristal_intro_end.ogg", "static")
-        self.noise:play()
+        --self.noise:play()
     else
         self:beginLoad()
     end
@@ -50,26 +42,46 @@ function Loading:enter(from, dir)
     self.done_loading = false
 end
 
+
+
 function Loading:beginLoad()
     Kristal.clearAssets(true)
 
-    self.loading_state = Loading.States.LOADING
+    self.loading = true
+    self.load_complete = false
 
-    Kristal.loadAssets("", "all", "")
-    Kristal.loadAssets("", "mods", "", function()
-        self.loading_state = Loading.States.DONE
+    local function asset_loader()
 
-        Assets.saveData()
+        local all_complete = false
+        local mods_complete = false
 
-        Kristal.setDesiredWindowTitleAndIcon()
+        local function break_me_out() 
+            if all_complete and mods_complete then
+                self.loading = false
+                self.load_complete = true
+                Assets.saveData()
+                Kristal.setDesiredWindowTitleAndIcon()
+            end
+        end
 
-        -- Create the debug console
-        Kristal.Console = Kristal.Stage:addChild(Console())
-        -- Create the debug system
-        Kristal.DebugSystem = Kristal.Stage:addChild(DebugSystem())
+        Kristal.loadAssets("", "all", "", function () 
+            all_complete = true
+            break_me_out()
+        end)
+        Kristal.loadAssets("", "mods", "", function ()
+            mods_complete = true
+            break_me_out()
+            -- self.loading = false
+            -- print("The loading of the mods are complete")
+            -- self.load_complete = true
+            -- Assets.saveData()
+            -- Kristal.setDesiredWindowTitleAndIcon()
+        end)
+    end
 
-        REGISTRY_LOADED = true
-    end)
+    asset_loader()
+
+
 end
 
 function Loading:update()
@@ -77,10 +89,17 @@ function Loading:update()
         return
     end
 
-    if (self.loading_state == Loading.States.DONE) and self.key_check and (self.animation_done or Kristal.Config["skipIntro"]) then
+    if self.load_complete and self.key_check and (self.animation_done or Kristal.Config["skipIntro"]) then
         -- We're done loading! This should only happen once.
         self.done_loading = true
 
+        -- create a console
+        Kristal.Console = Console()
+        Kristal.Stage:addChild(Kristal.Console)
+        -- create the debug system
+        Kristal.DebugSystem = DebugSystem()
+        Kristal.Stage:addChild(Kristal.DebugSystem)
+        REGISTRY_LOADED = true
         if Kristal.Args["test"] then
             Kristal.setState("Testing")
         elseif AUTO_MOD_START and TARGET_MOD then
@@ -139,7 +158,7 @@ function Loading:draw()
         if (self.factor < 0) then
             self.factor = 0
             self.animation_phase = 1
-            if self.loading_state == Loading.States.WAITING then
+            if not self.loading and not self.load_complete then
                 self:beginLoad()
             end
         end
@@ -156,11 +175,11 @@ function Loading:draw()
     if (self.animation_phase == 1) then
         self:drawSprite(self.logo, self.x + (self.w / 2), self.y + (self.h / 2), self.logo_alpha)
         self.animation_phase_timer = self.animation_phase_timer + 1 * dt_mult
-        if (self.animation_phase_timer >= 30) and (self.loading_state == Loading.States.DONE) then
+        if (self.animation_phase_timer >= 30) and self.load_complete then
             self.siner = 0
             self.factor = 0
             self.animation_phase = 2
-            self.end_noise:play()
+            --self.end_noise:play()
         end
     end
     if (self.animation_phase == 2) then
@@ -181,25 +200,24 @@ function Loading:draw()
         if (self.mina >= 0.14) then
             self.mina = 0.14
         end
-
         self.factor2 = self.factor2 + 0.05 * dt_mult
-
-        local angle_offset = (self.siner / 8)
-        local alpha = (self.mina * self.logo_alpha)
-
-        local center_x = self.x + (self.w / 2)
-        local center_y = self.y + (self.h / 2)
-
         for i = 0, 9 do
-            local angle = angle_offset + (i / 2)
-            local offset = i * self.factor2
-            local x_offset = math.sin(angle) * offset
-            local y_offset = math.cos(angle) * offset
-
-            self:drawSprite(self.logo, center_x - x_offset, center_y - y_offset, alpha)
-            self:drawSprite(self.logo, center_x + x_offset, center_y - y_offset, alpha)
-            self:drawSprite(self.logo, center_x - x_offset, center_y + y_offset, alpha)
-            self:drawSprite(self.logo, center_x + x_offset, center_y + y_offset, alpha)
+            self:drawSprite(self.logo,
+                            ((self.x + (self.w / 2)) - (math.sin(((self.siner / 8) + (i / 2))) * (i * self.factor2))),
+                            ((self.y + (self.h / 2)) - (math.cos(((self.siner / 8) + (i / 2))) * (i * self.factor2))),
+                            (self.mina * self.logo_alpha))
+            self:drawSprite(self.logo,
+                            ((self.x + (self.w / 2)) + (math.sin(((self.siner / 8) + (i / 2))) * (i * self.factor2))),
+                            ((self.y + (self.h / 2)) - (math.cos(((self.siner / 8) + (i / 2))) * (i * self.factor2))),
+                            (self.mina * self.logo_alpha))
+            self:drawSprite(self.logo,
+                            ((self.x + (self.w / 2)) - (math.sin(((self.siner / 8) + (i / 2))) * (i * self.factor2))),
+                            ((self.y + (self.h / 2)) + (math.cos(((self.siner / 8) + (i / 2))) * (i * self.factor2))),
+                            (self.mina * self.logo_alpha))
+            self:drawSprite(self.logo,
+                            ((self.x + (self.w / 2)) + (math.sin(((self.siner / 8) + (i / 2))) * (i * self.factor2))),
+                            ((self.y + (self.h / 2)) + (math.cos(((self.siner / 8) + (i / 2))) * (i * self.factor2))),
+                            (self.mina * self.logo_alpha))
         end
         self:drawSprite(self.logo_heart, self.x + (self.w / 2), self.y + (self.h / 2), self.logo_alpha)
         if (self.logo_alpha <= -0.5 and self.skipped == false) then
@@ -238,7 +256,7 @@ end
 function Loading:onKeyPressed(key)
     self.key_check = true
     self.skipped = true
-    if self.loading_state == Loading.States.WAITING then
+    if not self.loading and not self.load_complete then
         self:beginLoad()
     end
 end
