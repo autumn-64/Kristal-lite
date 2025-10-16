@@ -9,3 +9,4 @@ build/
 output/
 
 *.tiled-session
+*.love
