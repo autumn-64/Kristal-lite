@@ -245,8 +245,8 @@ function Loading:draw()
 
         -- Change the fade opacity for the next frame
         self.fader_alpha = math.max(0, self.fader_alpha + (0.04 * dt_mult))
-        self.noise:setVolume(math.max(0, 1 - self.fader_alpha))
-        self.end_noise:setVolume(math.max(0, 1 - self.fader_alpha))
+        --self.noise:setVolume(math.max(0, 1 - self.fader_alpha))
+        --self.end_noise:setVolume(math.max(0, 1 - self.fader_alpha))
     end
 
     -- Reset the draw color
