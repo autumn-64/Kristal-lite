@@ -239,8 +239,8 @@ function Loading:draw()
 
         if self.fader_alpha > 1 then
             self.animation_done = true
-            self.noise:stop()
-            self.end_noise:stop()
+           -- self.noise:stop()
+            --self.end_noise:stop()
         end
 
         -- Change the fade opacity for the next frame
