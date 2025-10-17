@@ -144,8 +144,6 @@ function DarkConfigMenu:update()
             elseif self.currently_selected == 5 then
                 Kristal.Config["autoRun"] = not Kristal.Config["autoRun"]
             elseif self.currently_selected == 6 then
-                Game:returnToMenu()
-            elseif self.currently_selected == 7 then
                 Game.world.menu:closeBox()
             end
 
@@ -170,7 +168,7 @@ function DarkConfigMenu:update()
             self.ui_move:play()
         end
 
-        self.currently_selected = Utils.clamp(self.currently_selected, 1, 7)
+        self.currently_selected = Utils.clamp(self.currently_selected, 1, 6)
     elseif self.state == "VOLUME" then
         if Input.pressed("cancel") or Input.pressed("confirm") then
             Kristal.setVolume(Utils.round(Kristal.getVolume() * 100) / 100)
@@ -225,8 +223,7 @@ function DarkConfigMenu:draw()
         love.graphics.print("Simplify VFX", 88, 38 + (2 * 32))
         love.graphics.print("Fullscreen", 88, 38 + (3 * 32))
         love.graphics.print("Auto-Run", 88, 38 + (4 * 32))
-        love.graphics.print("Return to Title", 88, 38 + (5 * 32))
-        love.graphics.print("Back", 88, 38 + (6 * 32))
+        love.graphics.print("Back", 88, 38 + (5 * 32))
 
         if self.state == "VOLUME" then
             Draw.setColor(PALETTE["world_text_selected"])
